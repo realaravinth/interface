@@ -40,6 +40,7 @@ class Runner:
         self.logger = logging.getLogger("jobs")
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.git = get_forge()
+        self.event = threading.Event()
 
         with self.app.app_context():
             conn = get_db()
@@ -53,6 +54,9 @@ class Runner:
                 (local_settings.INTERFACE_URL, str(last_run)),
             )
             conn.commit()
+
+    def get_event(self) -> threading.Event:
+        return self.event
 
     def _update_time(self, last_run: datetime.datetime):
         with self.app.app_context():
@@ -75,6 +79,8 @@ class Runner:
             return res[0]
 
     def _background_job(self):
+        if self.event.is_set():
+            return
         with self.app.app_context():
             global RUNNING
             if RUNNING:
@@ -116,3 +122,10 @@ class Runner:
             local_settings.JOB_RUNNER_DELAY, 8, self._background_job
         )  # argument=(self,))
         threading.Thread(target=self.scheduler.run).start()
+
+
+def init_app(app):
+    runner = Runner(app)
+    runner_controller = runner.get_event()
+    runner.run()
+    app.teardown_appcontext(runner_controller.set())

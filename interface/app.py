@@ -18,11 +18,10 @@ Flask application
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
 
-from flask import Flask
+from flask import Flask, g
 
-from interface import db
+from interface import db, runner
 from interface.api.v1 import bp
-from interface.runner import Runner
 
 
 def create_app(test_config=None):
@@ -45,12 +44,12 @@ def create_app(test_config=None):
     except OSError:
         pass
 
+    runner.init_app(app)
+
     @app.after_request
     def flock_google(response):
         response.headers["Permissions-Policy"] = "interest-cohort=()"
         return response
-
-    Runner(app).run()
 
     app.register_blueprint(bp)
     return app

@@ -26,8 +26,8 @@ from interface.forges.payload import (
     CreateIssue,
     CommentOnIssue,
 )
-from .conn import get_db
-from .interfaces import DBInterfaces
+from interface.db.conn import get_db
+from interface.db.interfaces import DBInterfaces
 
 
 @unique
@@ -43,7 +43,7 @@ class JobStatus(Enum):
 
 
 @dataclass
-class DBTask:
+class LocalDBTask:
     """Task information in the database"""
 
     signed_by: DBInterfaces
@@ -64,7 +64,7 @@ class DBTask:
         cur = conn.cursor()
         cur.execute(
             """
-            UPDATE tasks
+            UPDATE remote_tasks
             SET
                 updated = ?,
                 status = ?
@@ -103,7 +103,7 @@ class DBTask:
             try:
                 cur.execute(
                     """
-                    INSERT INTO tasks
+                    INSERT INTO remote_tasks
                         (job_id, status, created, signed_by)
                     VALUES
                         (?, ?, ?, (SELECT ID FROM interfaces WHERE url = ?));
@@ -118,7 +118,7 @@ class DBTask:
                 conn.commit()
                 data = cur.execute(
                     """
-                    SELECT ID FROM tasks
+                    SELECT ID FROM remote_tasks
                     WHERE
                         job_id = ?
                     AND
@@ -133,7 +133,7 @@ class DBTask:
                 continue
 
     @classmethod
-    def load_with_job_id(cls, job_id: UUID) -> "DBTask":
+    def load_with_job_id(cls, job_id: UUID) -> "LocalDBTask":
         """Load user from database with the URL of the interface which signed it's creation"""
         conn = get_db()
         cur = conn.cursor()
@@ -146,7 +146,7 @@ class DBTask:
                  updated,
                  signed_by
              FROM
-                 tasks
+                 remote_tasks
              WHERE
                 job_id = ?
             """,
@@ -165,7 +165,7 @@ class DBTask:
         return val
 
     @classmethod
-    def load_with_db_id(cls, db_id: int) -> "DBTask":
+    def load_with_db_id(cls, db_id: int) -> "LocalDBTask":
         """Load job from database with database ID assigned to the job"""
         conn = get_db()
         cur = conn.cursor()
@@ -178,7 +178,7 @@ class DBTask:
                  updated,
                  signed_by
              FROM
-                 tasks
+                 remote_tasks
              WHERE
                 ID = ?
             """,
@@ -196,7 +196,7 @@ class DBTask:
 
 
 @dataclass
-class DBTaskJson:
+class LocalDBTaskJson:
     """Task configuration and related data stored as JSON in the database"""
 
     job_uuid: UUID
@@ -223,28 +223,28 @@ class DBTaskJson:
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO tasks_json
+            INSERT INTO remote_tasks_json
                 (json, task_id)
             VALUES
-                (?, (SELECT ID FROM tasks WHERE job_id = ?))
+                (?, (SELECT ID FROM remote_tasks WHERE job_id = ?))
             """,
             (json.dumps(asdict(self.message)), str(self.job_uuid)),
         )
         conn.commit()
         data = cur.execute(
             """
-            SELECT ID FROM tasks_json
+            SELECT ID FROM remote_tasks_json
             WHERE
-                task_id = (SELECT ID FROM tasks WHERE job_id =?)
+                task_id = (SELECT ID FROM remote_tasks WHERE job_id =?)
             """,
             (str(self.job_uuid),),
         ).fetchone()
         self.id = data[0]
 
     @classmethod
-    def load_with_job_id(cls, job_id: UUID) -> "DBTaskJson":
+    def load_with_job_id(cls, job_id: UUID) -> "LocalDBTaskJson":
         """Load user from database with the URL of the interface which signed it's creation"""
-        task = DBTask.load_with_job_id(job_id)
+        task = LocalDBTask.load_with_job_id(job_id)
         if task is None:
             return None
 
@@ -256,9 +256,9 @@ class DBTaskJson:
                  ID,
                  json
              FROM
-                 tasks_json
+                 remote_tasks_json
              WHERE
-                task_id = (SELECT ID FROM tasks WHERE job_id =?)
+                task_id = (SELECT ID FROM remote_tasks WHERE job_id =?)
             """,
             (str(job_id),),
         ).fetchone()
@@ -275,7 +275,7 @@ class DBTaskJson:
         return val
 
     @classmethod
-    def load_with_db_id(cls, db_id: int) -> "DBTaskJson":
+    def load_with_db_id(cls, db_id: int) -> "LocalDBTaskJson":
         """Load job from database with database ID assigned to the job"""
         conn = get_db()
         cur = conn.cursor()
@@ -285,7 +285,7 @@ class DBTaskJson:
                  task_id,
                  json
              FROM
-                 tasks_json
+                 remote_tasks_json
              WHERE
                 ID = ?
             """,
@@ -293,21 +293,21 @@ class DBTaskJson:
         ).fetchone()
         if data is None:
             return None
-        job_uuid = DBTask.load_with_db_id(data[0]).uuid
+        job_uuid = LocalDBTask.load_with_db_id(data[0]).uuid
         message = cls.__create_msg(data[1])
         val = cls(id=db_id, job_uuid=job_uuid, message=message)
         return val
 
 
-def save_message(msg: Message) -> DBTask:
+def save_message(msg: Message) -> LocalDBTask:
     """save a message in database and it's status as an event in database"""
     interface = DBInterfaces.load_from_url(msg.meta.interface_url)
     if interface is None:
         # get and save interface
         raise NotImplementedError
-    task = DBTask(signed_by=interface)
+    task = LocalDBTask(signed_by=interface)
     task.save()
 
-    task_json = DBTaskJson(job_uuid=task.uuid, message=msg)
+    task_json = LocalDBTaskJson(job_uuid=task.uuid, message=msg)
     task_json.save()
     return task

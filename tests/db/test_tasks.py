@@ -17,13 +17,13 @@ from dataclasses import asdict
 
 from interface.auth import KeyPair
 from interface.forges.payload import MetaData, Author, CommentOnIssue, RepositoryInfo
-from interface.db import DBInterfaces, JobStatus, DBTask, save_message, DBTaskJson
+from interface.db import DBInterfaces, JobStatus, LocalDBTask, save_message, LocalDBTaskJson
 
 from .test_interface import cmp_interface
 
 
-def cmp_tasks(lhs: DBTask, rhs: DBTask) -> bool:
-    """Compare two DBTask objects"""
+def cmp_tasks(lhs: LocalDBTask, rhs: LocalDBTask) -> bool:
+    """Compare two LocalDBTask objects"""
     return all(
         [
             lhs.uuid == rhs.uuid,
@@ -36,8 +36,8 @@ def cmp_tasks(lhs: DBTask, rhs: DBTask) -> bool:
     )
 
 
-def cmp_task_json(lhs: DBTaskJson, rhs: DBTaskJson) -> bool:
-    """Compare two DBTaskJson objects"""
+def cmp_task_json(lhs: LocalDBTaskJson, rhs: LocalDBTaskJson) -> bool:
+    """Compare two LocalDBTaskJson objects"""
     return all(
         [
             lhs.id == rhs.id,
@@ -48,35 +48,35 @@ def cmp_task_json(lhs: DBTaskJson, rhs: DBTaskJson) -> bool:
 
 
 def test_task(client):
-    """Test DBTask database class"""
+    """Test LocalDBTask database class"""
 
     key = KeyPair()
     url = "https://test_interface.example.com"
     interface = DBInterfaces(url=url, public_key=key.to_base64_public())
     interface.save()
 
-    task = DBTask(
+    task = LocalDBTask(
         signed_by=interface,
     )
 
-    assert DBTask.load_with_db_id(11) is None
-    assert DBTask.load_with_job_id(task.uuid) is None
-    assert DBTaskJson.load_with_job_id(task.uuid) is None
+    assert LocalDBTask.load_with_db_id(11) is None
+    assert LocalDBTask.load_with_job_id(task.uuid) is None
+    assert LocalDBTaskJson.load_with_job_id(task.uuid) is None
 
     task.save()
 
-    from_db_with_db_id = DBTask.load_with_db_id(task.id)
-    from_db_with_job_id = DBTask.load_with_job_id(task.uuid)
+    from_db_with_db_id = LocalDBTask.load_with_db_id(task.id)
+    from_db_with_job_id = LocalDBTask.load_with_job_id(task.uuid)
     assert cmp_tasks(task, from_db_with_db_id)
     assert cmp_tasks(task, from_db_with_job_id)
 
     task.set_error()
     assert task.get_status() is JobStatus.ERROR
-    assert DBTask.load_with_db_id(task.id).get_status() is JobStatus.ERROR
+    assert LocalDBTask.load_with_db_id(task.id).get_status() is JobStatus.ERROR
 
     task.set_completed()
     assert task.get_status() is JobStatus.COMPLETED
-    assert DBTask.load_with_db_id(task.id).get_status() is JobStatus.COMPLETED
+    assert LocalDBTask.load_with_db_id(task.id).get_status() is JobStatus.COMPLETED
     db_id = task.id
     uuid = task.uuid
 
@@ -97,20 +97,20 @@ def test_task(client):
         meta=meta, body="test comment", repository=repo, issue_url=meta.html_url
     )
 
-    task_json = DBTaskJson(job_uuid=task.uuid, message=comment)
+    task_json = LocalDBTaskJson(job_uuid=task.uuid, message=comment)
 
-    assert DBTaskJson.load_with_db_id(11) is None
-    assert DBTaskJson.load_with_job_id(task.uuid) is None
+    assert LocalDBTaskJson.load_with_db_id(11) is None
+    assert LocalDBTaskJson.load_with_job_id(task.uuid) is None
 
     task_json.save()
 
-    assert cmp_task_json(task_json, DBTaskJson.load_with_db_id(task_json.id))
-    assert cmp_task_json(task_json, DBTaskJson.load_with_job_id(task.uuid))
+    assert cmp_task_json(task_json, LocalDBTaskJson.load_with_db_id(task_json.id))
+    assert cmp_task_json(task_json, LocalDBTaskJson.load_with_job_id(task.uuid))
 
     task = save_message(comment)
-    assert cmp_tasks(task, DBTask.load_with_db_id(task.id))
-    task_json = DBTaskJson.load_with_job_id(task.uuid)
-    task = DBTask.load_with_db_id(task.id)
+    assert cmp_tasks(task, LocalDBTask.load_with_db_id(task.id))
+    task_json = LocalDBTaskJson.load_with_job_id(task.uuid)
+    task = LocalDBTask.load_with_db_id(task.id)
     assert task_json is not None
     assert task is not None
     assert task_json.job_uuid == task.uuid

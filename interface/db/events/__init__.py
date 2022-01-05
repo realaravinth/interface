@@ -12,12 +12,5 @@
 # GNU Affero General Public License for more details.
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from .conn import init_app, get_db, get_git_system, init_db
 
-from .interfaces import DBInterfaces
-from .repo import DBRepo
-from .issues import DBIssue
-from .users import DBUser
-from .subscriptions import DBSubscribe
-from .comments import DBComment
-from .events import LocalDBTask, JobStatus, LocalDBTaskJson, save_message
+from .local import LocalDBTask, JobStatus, LocalDBTaskJson, save_message
